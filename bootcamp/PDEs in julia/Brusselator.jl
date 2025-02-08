@@ -66,4 +66,4 @@ gif(anim, "Brusselator2Dsol_u.gif", fps = 8)
 anim = @animate for k in 1:length(discrete_t)
     heatmap(solv[2:end, 2:end, k], title = "$(discrete_t[k])")
 end
-gif(anim, "Brusselator2Dsol_v.gif", fps = 8)
+gif(anim, "Brusselator2Dsol_V.gif", fps = 8)
