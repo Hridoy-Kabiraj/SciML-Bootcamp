@@ -1,71 +1,47 @@
-using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
+using OrdinaryDiffEq, MethodOfLines, ModelingToolkit, DomainSets
 
-@parameters r z t
+
+# x = R , y = Z
+@parameters x y t
 @variables ψ(..)
 
 Dt = Differential(t)
-Dr = Differential(r)
-Drr = Differential(r)^2
-Dz = Differential(z)
-Dzz = Differential(z)^2
+Dx = Differential(x)
+Dxx = Differential(x)^2
+Dy = Differential(y)
+Dyy = Differential(y)^2
 
-∇(ψ) = Dr(ψ) + Dz(ψ)
-∇²(ψ) = Drr(ψ) + Dzz(ψ)
+xmin, xmax = 1.0, 4.0
+ymin, ymax = -2.0, 2.0
+tmin, tmax = 0.0, 12.0
 
-
-#= η(R,Z)= C / (Te)^(3/2)
-function η(R, Z)
-    Te = 1000.0 - 500.0 * exp(-((R - 1.0)^2 + Z^2) / 0.1)  # Example temperature profile
-    C = 1e-4  # Resistivity constant
-    return C / Te^(3/2)  # Spitzer resistivity
-end
-=#
-
-
-#= J(R,z) = - (1/μ0*R)*(∇^2(ψ))
-function J(R, Z, ψ(R, Z, t))
-    μ0 = 4 * π * 1e-7  # Permeability of free space
-    return -(1 / (μ0 * R)) * (∇²(ψ(R, Z, t)))
-end
-=#
-
-
-#= v_ψ = -η*J
-function v_ψ(R, Z, ψ(R, z, t))
-    return -η(R, Z) * J(R, Z, ψ(R, Z, t))
-end
-=#
-Rmin = 1.0
-Rmax = 4.0
-Zmin = -1.0
-Zmax = 1.0
-tmin = 0.0
-tmax = 12
+#Assuming constant Plasma flow velocity
 v_ψ_value = -1.0
 
-eqs = Dt(ψ(r, z, t)) + v_ψ_value*∇(ψ(r, z, t)) ~ r * Dr((1/r)*Dr(ψ(r, z, t))) + Dzz(ψ(r, z, t))
+ψ0_func(x, y, t) = exp(-(((x-2)^2 + y^2) / 0.5^2))
 
-# R0 = 2m, Z0 = 0m, σ = 0.5m
-ψ0_func(r, z) = exp(-((((r-2)^2)+z^2)/(0.5)^2))
+eqs = [Dt(ψ(x, y, t)) + v_ψ_value * (Dx(ψ(x, y, t)) + Dy(ψ(x, y, t))) ~  -(Dx(ψ(x, y, t)) / x) + Dxx(ψ(x, y, t)) + Dyy(ψ(x, y, t))]
 
-
-
-bcs = [ψ(r,z,0) ~ ψ0_func(r,z),
-       DR(ψ(Rmin, z, t)) ~ 0,
-       DR(ψ(Rmax, z, t)) ~ 0,
-       DZ(ψ(r, Zmin, t)) ~ 0,
-       DZ(ψ(r, Zmax, t)) ~ 0]
+# Inital and Boundary Conditions
+bcs = [ψ(x, y, 0) ~ ψ0_func(x, y, 0),
+       Dx(ψ(xmin, y, t)) ~ 0,
+       Dx(ψ(xmax, y, t)) ~ 0,
+       Dy(ψ(x, ymin, t)) ~ 0,
+       Dy(ψ(x, ymax, t)) ~ 0]
 
 
-domains = [r ∈ Interval(Rmin, Rmax),
-           z ∈ Interval(Zmin, Zmax),
+# Domains
+domains = [x ∈ Interval(xmin, xmax),
+           y ∈ Interval(ymin, ymax),
            t ∈ Interval(tmin, tmax)]
 
-@named pdesys = PDESystem(eqs, bcs, domains,[r, z, t], [ψ(r, z, t)])
 
-N = 32
+@named pdesys = PDESystem(eqs, bcs, domains, [x, y, t], [ψ(x, y, t)])
+
+
+N = 64
 order = 2
-discretization = MOLFiniteDifference([r=>N, z=>N], t, approx_order=order)
+discretization = MOLFiniteDifference([x => N, y => N], t, approx_order=order)
 
 println("Discretization:")
 @time prob = discretize(pdesys, discretization)
@@ -73,5 +49,20 @@ println("Discretization:")
 println("Solve:")
 @time sol = solve(prob, TRBDF2(), saveat=0.1)
 
+dis_x = sol[x]
+dis_y = sol[y]
+dis_t = sol[t]
+dis_ψ = sol[ψ(x, y, t)]
 
 
+using Plots
+
+# Assuming dis_ψ is your 3D array with shape (32, 32, 121)
+# You can plot the first frame (time step) as an example
+
+# Extract the first time step
+frame = dis_ψ[:, :, 1]
+
+# Create a surface plot
+plot_surface = surface(frame)
+display(plot_surface)
